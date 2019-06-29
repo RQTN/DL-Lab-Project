@@ -33,6 +33,8 @@ However, both LSTM and attention layer are very timeconsuming during training. C
 
 In this paper, the authors propose a fast and effective neural network for ACSA and ATSA based on convolutions and gating mechanisms, which has much less training time than LSTM based networks, but with better accuracy. 
 
+==**my key results**==: haven't written yet. The key results will choose from [Experiments part](#**Experiments**) (Acc and Time to converge).
+
 ### Problem formulation 
 
 > Problem formulation: formally describe the research problem. 
@@ -45,29 +47,71 @@ could be more than a thousand.
 
 For example, in the sentence “*Average to good Thai food, but terrible delivery.*”, ATSA would ask the sentiment polarity towards the entity *Thai food*; while ACSA would ask the sentiment polarity toward the aspect *service*, even though the word *service* does not appear in the sentence. 
 
-### Method
+### **Method**
 
 > Method: the basic idea, model structure. 
 
-### Implementation
+The authors' model GCAE can handle both ACSA task and ATSA task well, but its architecture is slightly different between the two tasks, mainly in the **embedding of the aspect information**. 
+
+For ACSA task, **GCAE mainly consists of an embedding layer, a pair of one-dimension convolutional layer, GTRU gate and a max-pooling layer.** Figure 1 illustrates the authors’ model architecture for ACSA task.
+
+<center><img src='img/GCAE-ACSA.png' height=400px><center>
+<center><span>Figure 1: Illustration of the authors' model GCAE for ACSA task</span></center>
+
+Suppose we now have a sentence $X$, $X$ contains $L$ words, through the embedding layer, each word can be converted into a $D$-dimension word vector, at this time, the sentence $X$ is represented as a $D\times L$ matrix.
+$$
+\begin{align}
+X&=[v_1, v_2, \cdots, v_L]\tag{1}
+\end{align}
+$$
+The **one-dimension** convolutional layer convolves the embedding vectors input $X$ with multiple convolutional kernels of different widths. We use the filter $W_c \in R^{D\times k}(k<L)$ to scan on the sentence matrix X. For each scan position, we can get a convolution result $X_{i:i+k}*W_c$.
+
+**A pair of convolutional neuron computes features for a pair of gates: tanh gate and ReLU gate. The ReLU gate receives the given aspect information.** The outputs of two gates are element-wisely multiplied, thus, we compute the feature $c_i$ as:
+$$
+\begin{align}
+a_i&=relu(X_{i:i+k}*W_a+V_av_a+b_a)\tag{2}\\\\
+s_i&=tanh(X_{i:i+k}*W_s+b_s)\tag{3}\\\\
+c_i&=s_i\times a_i\tag{4}
+\end{align}
+$$
+where $v_a$ is the embedding vector of the given aspect category in ACSA.
+
+We can set $n_k$ filters of the same width k, the output features of a sentence then form a matrix $C\in R^{n_k\times L_k}$. For each convolutional filter, the max-over-time pooling layer takes the maximal value among the generated features, i.e., the maximal value of each line of $C$, resulting in a fixed-size vector $e\in R^{n_k}$.
+
+Finally, the final fully-connected layer with softmax function uses the vector $e$ to predict the sentiment polarity $\hat{y}$. The model is trained by minimizing the cross-entropy loss between the ground-truth $y$ and the predicted value $\hat{y}$ for all data samples.
+
+For ATSA task, the given aspect information consists of multiple words instead of one word in ACSA task, **the authors simply extend GCAE by adding a small convolutional layer on aspect terms** to deal with this situation, as shown in Figure 2.
+
+<center><img src='img/GCAE-ATSA.png'><center>
+<center><span>Figure 2: Illustration of the authors' model GCAE for ATSA task. It has an additional convolutional layer on aspect terms.</span></center>
+
+In ACSA, the aspect information controlling the flow of the sentiment features in GTRU is from one aspect word; while in ATSA, such information is provided by a small CNN on aspect terms $[w_i, w_{i+1}, \cdots, w_{i+k}]$. The additional CNN extracts the important features from multiple words while retains the ability of parallel computing.
+
+### **Implementation**
 
 > Implementation: what you have done, difficulties & solutions
 
 
 
-### Experiments
+### **Experiments**
 
 > Experiments: all tests, including worse and better results.
 
+- ACSA Accuracy: GCAE vs. ATAE-LSTM
+  - Accuracy on Semval ACSA Restaurant-Large dataset (normal version and hard version)
 
+- ATSA Accuracy: GCAE vs. TD-LSTM
+  - Accuracy on Semval ATSA Restaurant dataset (normal version and hard version)
+- The time to converge in seconds on ATSA task: GCAE, ATAE-LSTM, TD-LSTM
+- The accuracy of different gating units on restaurant reviews on ACSA task: GTU, GLU, GTRU
 
 ### Conclusion
 
-> conclusion from experimental evaluation.
+> Conclusion: conclusion from experimental evaluation.
 
 
 
-### Source code
+### **Source code**
 
 > Also can find on Github: [DL-Lab-Project](<https://github.com/RQTN/DL-Lab-Project>)
 

@@ -16,7 +16,7 @@ In this paper, the authors propose a model based on **convolutional neural netwo
 
 ABSA has two different subtasks, namely **aspect-category sentiment analysis (ACSA)** and **aspect-term sentiment analysis (ATSA)**. The authors' model GCAE can handle both tasks well, but its architecture has a little difference between two tasks. In the Midterm Report, I mainly focus ACSA task. 
 
-<center><img src='img/1.png' height=400px><center>
+<center><img src='img/GCAE-ACSA.png' height=400px><center>
 <center><span>Figure 1: Illustration of the authors' model GCAE for ACSA task</span></center>
 
 **GCAE consists of an embedding layer, a pair of one-dimension convolutional layer, GTRU gate and a max-pooling layer.** 
@@ -58,11 +58,12 @@ To access how the models perform on review sentences more accurately, the author
 
 I conduct experiments on both the acsa-restaurant-large dataset dataset and the hard version of the former, batch-size=128 and learning rate=1e-2.
 
-<center><img src='img/2.png' height=500px></center>
+<center><img src='img/mid-term-ACSA-normal.png' height=500px></center>
 <center><span>GCAE's performence on acsa-restaurant-large dataset</span></center>
 
-<center><img src='img/3.png' height=300px></center>
+<center><img src='img/mid-term-ACSA-hard.png' height=300px></center>
 <center><span>GCAE's performence on acsa-restaurant-large hard dataset</span></center>
+
 On acsa-restaurant-large dataset, I finally get 84.00% accuracy on test set in 62 seconds. 
 
 On acsa-restaurant-large hard dataset, I finally get 75.00% accuracy on test set in 19.5 seconds.
