@@ -1,4 +1,4 @@
-## Midterm Report for Reproducing Paper
+## Midterm Report For Reproducing Paper
 
 > Paper link: [Aspect Based Sentiment Analysis with Gated Convolutional Networks ](<https://www.aclweb.org/anthology/P18-1234>)
 
@@ -60,7 +60,6 @@ I conduct experiments on both the acsa-restaurant-large dataset dataset and the 
 
 <center><img src='img/2.png' height=500px></center>
 <center><span>GCAE's performence on acsa-restaurant-large dataset</span></center>
-
 
 <center><img src='img/3.png' height=300px></center>
 <center><span>GCAE's performence on acsa-restaurant-large hard dataset</span></center>
