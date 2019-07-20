@@ -8,9 +8,6 @@
 
 ### Abstract
 
-> Abstract: problem, difficulty, idea, your key result.
->
-
 **Aspect based sentiment analysis (ABSA)** can provide more detailed information than general sentiment analysis, because it aims to predict the sentiment polarities of the given aspects or entities in text. The authors summarize previous approaches into two subtasks: **aspect-category sentiment analysis (ACSA)** and **aspect-term sentiment analysis (ATSA)**. 
 
 For general sentiment analysis, TextCNN proposed by Kim is a very classic CNN-based model. But for Aspect based sentiment analysis (ABSA), it seems that **no CNN-based model** has been proposed so far, most previous approaches employ **long short-term memory** and **attention mechanisms** to predict the sentiment polarity of the concerned targets, which are often complicated and need more training time. 
@@ -20,8 +17,6 @@ The authors a model based on **convolutional neural networks** and **gating mech
 The experiments on SemEval datasets demonstrate the efficiency and effectiveness of the author's models.
 
 ### Introduction
-
-> Introduction: application background, research problem, related existing methods, the paper’s idea, your key results. 
 
 Opinion mining and sentiment analysis (Pang and Lee, 2008) on user-generated reviews can provide valuable information for providers and consumers. Instead of predicting the overall sentiment polarity, fine-grained aspect based sentiment analysis (ABSA) (Liu and Zhang, 2012) is proposed to better understand reviews than traditional sentiment analysis.
 
@@ -33,11 +28,7 @@ However, both LSTM and attention layer are very timeconsuming during training. C
 
 In this paper, the authors propose a fast and effective neural network for ACSA and ATSA based on convolutions and gating mechanisms, which has much less training time than LSTM based networks, but with better accuracy. 
 
-==**my key results**==: haven't written yet. The key results will choose from [Experiments part](#**Experiments**) (Acc and Time to converge).
-
 ### Problem formulation 
-
-> Problem formulation: formally describe the research problem. 
 
 A number of models have been developed for ABSA, and ABSA can be divided into two subtasks, namely aspect-category sentiment analysis (ACSA) and aspect-term sentiment analysis (ATSA). 
 
@@ -48,8 +39,6 @@ could be more than a thousand.
 For example, in the sentence “*Average to good Thai food, but terrible delivery.*”, ATSA would ask the sentiment polarity towards the entity *Thai food*; while ACSA would ask the sentiment polarity toward the aspect *service*, even though the word *service* does not appear in the sentence. 
 
 ### **Method**
-
-> Method: the basic idea, model structure. 
 
 The authors' model GCAE can handle both ACSA task and ATSA task well, but its architecture is slightly different between the two tasks, mainly in the **embedding of the aspect information**. 
 
@@ -89,33 +78,280 @@ In ACSA, the aspect information controlling the flow of the sentiment features i
 
 ### **Implementation**
 
-> Implementation: what you have done, difficulties & solutions
+#### Dataset
+
+To ensure that the GCAE model I reproduced will be able to get results **similar** to the authors, I use the dataset provided by the author on the Github [wxue004cs/GCAE](https://github.com/wxue004cs/GCAE), which contains 4 datasets in the root directory: `acsa-restaurant-2014`, `acsa-restaurant-large`, `atsa-laptop` and `atsa-restaurant`. 
+
+Since the sentences which have different sentiment labels for different aspects or targets in the sentence are more common in review data than in standard sentiment classification benchmark, to access how the models perform on review sentences more accurately, **the authors create small but hard datasets, which are made up of the sentences having opposite or different sentiments on different aspects/targets**. 
+
+Thus, each dataset contains 4 files for both hard version train/test set and normal version train/test set, for example, `acsa-restaurant-large`  dataset contains `acsa_hard_train.json`, `acsa_hard_test.json`, `acsa_train.json ` and `acsa_test.json`. 
+
+#### Data prepare
+
+As the authors mentioned in the paper, I also removed “conflict” labels from four sentiment labels. 
+
+```python
+def sweepAwayConflict(input_data):
+    ret = []
+    for i in input_data:
+        if i['sentiment'] != 'conflict':
+            ret.append(i)
+    return ret
+```
+
+**I use `torchtext` to do data pre-processing, build custom dataset class, load pre-trained GloVe and build data iter.** 
+
+Tokenize, to-lowercase and pre-processing.
+
+```python
+sentence_field = data.Field(lower=True, tokenize=WordPunctTokenizer().tokenize, batch_first=True)
+if acsa_or_atsa:
+    print('Handling acsa tasks.')
+    aspect_field = data.Field(sequential=False)
+else:
+    print('Handling atsa tasks.')
+    aspect_field = data.Field(lower=True, tokenize=WordPunctTokenizer().tokenize, batch_first=True)
+sentiment_field = data.Field(sequential=False, use_vocab=False)
+
+def clean_str(string):
+    """
+    Tokenization/string cleaning for all datasets except for SST.
+    Original taken from https://github.com/yoonkim/CNN_sentence/blob/master/process_data.py
+    """
+    string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)
+    string = re.sub(r"\'s", " \'s", string)
+    string = re.sub(r"\'ve", " \'ve", string)
+    string = re.sub(r"n\'t", " n\'t", string)
+    string = re.sub(r"\'re", " \'re", string)
+    string = re.sub(r"\'d", " \'d", string)
+    string = re.sub(r"\'ll", " \'ll", string)
+    string = re.sub(r",", " , ", string)
+    string = re.sub(r"!", " ! ", string)
+    string = re.sub(r"\(", " \( ", string)
+    string = re.sub(r"\)", " \) ", string)
+    string = re.sub(r"\?", " \? ", string)
+    string = re.sub(r"\s{2,}", " ", string)
+    
+    return string.strip()
+```
+
+Build custom dataset class.
+
+```python
+class GCAEDataSet(data.Dataset):
+    
+    def __init__(self, sentence_field, aspect_field, sentiment_field, input_data, test=False, **kwargs):
+        
+        # sentence_field.preprocessing = data.Pipeline(clean_str)
+        
+        fields = []
+        
+        examples = []
+        
+        def sentimentMapping(sentiment):
+            if sentiment == 'negative':
+                return 0
+            elif sentiment == 'neutral':
+                return 1
+            elif sentiment == 'positive':
+                return 2
+        
+        if test:
+            fields = [('sentence', sentence_field), ('aspect', aspect_field), ('sentiment', None)]
+            for e in input_data:
+                examples.append(data.Example.fromlist([e['sentence'], e['aspect'], None], fields))
+        else:
+            fields = [('sentence', sentence_field), ('aspect', aspect_field), ('sentiment', sentiment_field)]
+            for e in input_data:
+                examples.append(data.Example.fromlist([e['sentence'], e['aspect'], sentimentMapping(e['sentiment'])], fields))
+        
+        
+        super(GCAEDataSet, self).__init__(examples, fields, **kwargs)
+    
+    @classmethod
+    def splits(cls, sentence_field, aspect_field, sentiment_field, train_json_data, val_json_data, test_json_data, **kwargs):
+        return (cls(sentence_field, aspect_field, sentiment_field, train_json_data, test=False),
+                cls(sentence_field, aspect_field, sentiment_field, val_json_data, test=False),
+                cls(sentence_field, aspect_field, sentiment_field, test_json_data, test=True))
+    
+```
+
+Load pre-trained word vectors GloVe, for those words not in GloVe, I randomly initialized them with a uniform distribution $U(-0.25, 0.25)$. 
+
+```python
+cache = './vector_cache'
+if not os.path.exists(cache):
+    os.mkdir(cache)
+    
+vectors = Vectors(name='glove.840B.300d.txt', cache=cache)
+
+def myUniform(w):
+    return nn.init.uniform_(w, a=-0.25, b=0.25)
+vectors.unk_init = myUniform
+```
+
+Use the loaded GloVe word vectors to build vocabulary, then all the words in sentence and aspect can match their word vector now.
+
+```python
+sentence_field.build_vocab(train_dataset, val_dataset, test_dataset, vectors=vectors)
+aspect_field.build_vocab(train_dataset, val_dataset, test_dataset, vectors=vectors)
+```
+
+Build data iter.
+
+```python
+def getDataIter(train_dataset, val_dataset, test_dataset):
+
+    train_iter = BucketIterator(train_dataset, 
+                            batch_size=batch_size, 
+                            sort_key=lambda x: len(x.sentence), 
+                            device=device, 
+                            sort=False,
+                            sort_within_batch=True, 
+                            repeat=False,
+                            train=True)
+
+
+    val_iter = BucketIterator(val_dataset, 
+                            batch_size=batch_size, 
+                            sort_key=lambda x: len(x.sentence), 
+                            device=device, 
+                            sort=False,
+                            sort_within_batch=True, 
+                            repeat=False,
+                            train=False)
+
+    test_iter = BucketIterator(test_dataset, 
+                            batch_size=batch_size, 
+                            sort_key=lambda x: len(x.sentence), 
+                            device=device, 
+                            sort=False,
+                            sort_within_batch=True, 
+                            repeat=False,
+                            train=False)
+    
+    return train_iter, val_iter, test_iter
+```
+
+#### Network
+
+I mainly use `Pytorch` to build the GCAE model.
+
+```python
+class GCAE(nn.Module):
+    
+    def __init__(self, sentence_field, kernel_num, kernel_sizes, 
+                 aspect_field, aspect_kernel_num, aspect_kernel_sizes, dropout):
+        
+        super(GCAE, self).__init__()
+        
+        sentence_vocab_size = sentence_field.vocab.vectors.size()[0]
+        embedding_dim = sentence_field.vocab.vectors.size()[1]
+        self.embedding = nn.Embedding(sentence_vocab_size, embedding_dim)
+        self.embedding.weight.data.copy_(sentence_field.vocab.vectors)
+        
+        aspect_vocab_size = aspect_field.vocab.vectors.size()[0]
+        aspect_embedding_dim = aspect_field.vocab.vectors.size()[1]
+        self.aspect_embedding = nn.Embedding(aspect_vocab_size, aspect_embedding_dim)
+        self.aspect_embedding.weight.data.copy_(aspect_field.vocab.vectors)
+        
+        self.sentence_a_convs = nn.ModuleList(
+            nn.Conv1d(
+                in_channels=embedding_dim,
+                out_channels=kernel_num,
+                kernel_size=kernel_size
+            ) for kernel_size in kernel_sizes
+        )
+        
+        self.sentence_s_convs = nn.ModuleList(
+            nn.Conv1d(
+                in_channels=embedding_dim,
+                out_channels=kernel_num,
+                kernel_size=kernel_size
+            ) for kernel_size in kernel_sizes
+        )
+        
+        self.aspect_convs = nn.ModuleList(
+            nn.Conv1d(
+                in_channels=aspect_embedding_dim,
+                out_channels=aspect_kernel_num,
+                kernel_size=aspect_kernel_size
+            ) for aspect_kernel_size in aspect_kernel_sizes
+        )
+        
+        self.aspect_linear = nn.Linear(len(aspect_kernel_sizes) * aspect_kernel_num, kernel_num)
+        self.dropout = nn.Dropout(dropout)
+        self.linear = nn.Linear(len(kernel_sizes) * kernel_num, 3)
+        
+    def forward(self, sentence, aspect):
+        if len(aspect.size()) == 1:
+            aspect = aspect.unsqueeze(1)
+
+        sentence = self.embedding(sentence).transpose(1, 2)
+        aspect = self.aspect_embedding(aspect).transpose(1, 2)
+        
+        aspects = [F.relu(aspect_conv(aspect)) for aspect_conv in self.aspect_convs]
+        aspects = [F.max_pool1d(aspect, aspect.size(2)).squeeze(2) for aspect in aspects]
+        aspect = torch.cat(aspects, dim=1)
+        aspect = self.aspect_linear(aspect)
+        
+        sentences_a = [F.leaky_relu(sentence_a_conv(sentence)) for sentence_a_conv in self.sentence_a_convs]
+        sentences_s = [F.relu(sentence_s_conv(sentence) + aspect.unsqueeze(2)) for sentence_s_conv in self.sentence_s_convs]
+        sentences = [a*s for a, s in zip(sentences_a, sentences_s)]
+        sentences = [F.max_pool1d(sentence, sentence.size(2)) for sentence in sentences]
+        sentence = torch.cat(sentences, dim=1).squeeze(2)
+
+        sentence = self.dropout(sentence)
+        output = self.linear(sentence)
+        
+        return output
+```
 
 
 
 ### **Experiments**
 
-> Experiments: all tests, including worse and better results.
+In the experimental part I mainly test the following:
 
-- ACSA Accuracy: GCAE vs. ATAE-LSTM
-  - Accuracy on Semval ACSA Restaurant-Large dataset (normal version and hard version)
+- Test 1: ACSA Accuracy on Semval ACSA Restaurant-Large dataset `acsa-restaurant-large` (both normal version and hard version)
 
-- ATSA Accuracy: GCAE vs. TD-LSTM
-  - Accuracy on Semval ATSA Restaurant dataset (normal version and hard version)
-- The time to converge in seconds on ATSA task: GCAE, ATAE-LSTM, TD-LSTM
-- The accuracy of different gating units on restaurant reviews on ACSA task: GTU, GLU, GTRU
+  <table>
+    <tr>
+    	<td><img src='./img/test_1_acsa_normal_test_acc.png'></td>
+      <td><img src='./img/test_1_acsa_hard_test_acc.png'></td>
+    </tr>
+    <tr>
+      <td><center>Accuracy on ACSA Restaurant-Large Normal Test</center></td>
+      <td><center>Accuracy on ACSA Restaurant-Large Hard Test</center></td>
+    </tr>
+  </table>
+
+  In the paper, the author’s accuracy on ACSA Restaurant-Large Normal Test is **85.92±0.27**, my accuracy (above left picture) is **a little over 0.85**, slightly lower than the author's results; the author's accuracy on ACSA Restaurant-Large Hard Test is **70.75±1.19**, my accuracy (above right picture) is basically the same as the author's results.
+
+- Test 2: ATSA Accuracy on Semval ATSA Restaurant dataset `atsa-restaurant` (both normal version and hard version)
+
+  <table>
+    <tr>
+    	<td><img src='./img/test_2_atsa_normal_test_acc.png'></td>
+      <td><img src='./img/test_2_atsa_hard_test_acc.png'></td>
+    </tr>
+    <tr>
+      <td><center>Accuracy on ATSA Restaurant Hard Test</center></td>
+      <td><center>Accuracy on ATSA Restaurant Normal Test</center></td>
+    </tr>
+  </table>
+
+  In the paper, the author’s accuracy on ATSA Restaurant Normal Test is **77.28±0.32**, my accuracy (above left picture) is **77.85±0.45**, which slightly higher than the author's results; the author's accuracy on ATSA Restaurant Hard Test is **56.73±0.56**, my accuracy is **58.21±3.26 **, which obviously higher that the author's results.
 
 ### Conclusion
 
-> Conclusion: conclusion from experimental evaluation.
+From the experimental results, the accuracy of the model I reproduced on multiple datasets is roughly in line with the results given by the author in the paper, and slightly better than the author's results.
 
-
+In the course of the experiment, it takes less than 0.5s to train an epoch on a training set of about 4000 sentences, and only about 7-8 epochs converge, which is better than those using LSTM and attention mechannism. GCAE is much faster!
 
 ### **Source code**
 
-> Also can find on Github: [DL-Lab-Project](<https://github.com/RQTN/DL-Lab-Project>)
-
-
+> See `GCAE.ipynb` in the root directory, also can find on Github: [DL-Lab-Project](<https://github.com/RQTN/DL-Lab-Project>).
 
 
 
